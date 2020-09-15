@@ -1,6 +1,7 @@
 import collections
 import io
 import tempfile
+from typing import NamedTuple
 import unittest
 import sys
 from itertools import repeat, chain, product
@@ -14,6 +15,7 @@ import torch
 import torch.cuda
 import torch.cuda.comm as comm
 from torch import multiprocessing as mp
+from torch.nn.parallel import scatter_gather
 from torch._six import inf, nan, container_abcs
 
 from test_torch import AbstractTestCases
@@ -3048,6 +3050,35 @@ class TestCudaComm(TestCase):
             else:
                 with self.assertRaisesRegex(RuntimeError, "expected (it|them) to be on GPU"):
                     torch.addmm(s, m1, m2)
+
+    @unittest.skipIf(not TEST_MULTIGPU, "Test needs multiple GPUs")
+    def test_scatter_namedtuple(self):
+        # tests ability to scatter namedtuples and retrieve a list where each
+        # element is of the expected namedtuple type.
+        TestNamedTupleInput_0 = collections.namedtuple("NamedTuple", ("a", "b"))
+        inp = TestNamedTupleInput_0(
+            torch.rand(10, device=0),
+            torch.rand(10, device=0),
+        )
+        num_gpus = torch.cuda.device_count()
+        target_gpus = [torch.device(i) for i in range(num_gpus)]
+        scatter_out = scatter_gather.scatter(inp, target_gpus)
+
+        for x in scatter_out:
+            self.assertTrue(isinstance(x, type(inp)))
+
+        class TestNamedTupleInput_1(NamedTuple):
+            a: torch.tensor
+            b: torch.tensor
+
+        inp = TestNamedTupleInput_1(
+            torch.rand(10, device=0),
+            torch.rand(10, device=0)
+        )
+
+        scatter_out = scatter_gather.scatter(inp, target_gpus)
+        for x in scatter_out:
+            self.assertTrue(isinstance(x, type(inp)))
 
 
 if __name__ == '__main__':
