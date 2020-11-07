@@ -128,7 +128,9 @@ bool test_mnist(
       torch::Tensor loss = torch::nll_loss(prediction, std::move(targets));
       AT_ASSERT(!torch::isnan(loss).any().item<int64_t>());
       optimizer.zero_grad();
+      std::cout << "before backward" << std::endl;
       loss.backward();
+      std::cout << "after backward" << std::endl;
       optimizer.step();
     }
   }
