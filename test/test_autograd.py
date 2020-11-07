@@ -2663,12 +2663,19 @@ class TestAutograd(TestCase):
             Uinv = torch.inverse(U)
             B = torch.matmul(Uinv, torch.matmul(A, U)).requires_grad_()
 
+            print('1')
             gradcheck(func, [B])
+            print('2')
             gradgradcheck(func, [B])
+            print('3')
             gradcheck(func_eigvals, [B])
+            print('4')
             gradgradcheck(func_eigvals, [B])
+            print('5')
             gradcheck(func_eigvecs, [B])
+            print('6')
             gradgradcheck(func_eigvecs, [B])
+            print('7')
 
         for dims in [(3, 3), (5, 5)]:
             run_test(dims)

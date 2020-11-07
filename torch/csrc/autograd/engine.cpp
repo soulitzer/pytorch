@@ -652,6 +652,9 @@ static variable_list call_function(
 
   {
     at::ThreadLocalStateGuard guard(graph_task->thread_locals_);
+    for (auto x : inputs) {
+      std::cout << x << std::endl;
+    }
     if (has_post_hooks) {
       // In functions/accumulate_grad.cpp, there is some logic to check the
       // conditions under which the incoming gradient can be stolen directly
@@ -864,14 +867,31 @@ auto Engine::execute(const edge_list& roots,
       /* cpu_ready_queue */ local_ready_queue);
 
   // Now compute the dependencies for all executable functions and queue the root
-  auto graph_root = std::make_shared<GraphRoot>(roots, inputs);
+  bool create_dummy_node = roots.size() != 1 && false;
+  auto graph_root = create_dummy_node ?
+    std::make_shared<GraphRoot>(roots, inputs) :
+    roots.at(0).function;
+
+  if (!create_dummy_node) {
+    for (const auto& t : inputs) {
+      graph_root->add_input_metadata(t);
+    }
+  }
+
   compute_dependencies(graph_root.get(), *graph_task);
 
   if (!outputs.empty()) {
     graph_task->init_to_execute(*graph_root, outputs, accumulate_grad);
   }
 
-  execute_with_graph_task(graph_task, graph_root);
+  if (create_dummy_node) {
+    std::cout << "with dummy node" << std::endl;
+    execute_with_graph_task(graph_task, graph_root);
+  } else {
+    std::cout << "no dummy node" << std::endl;
+    execute_with_graph_task(graph_task, graph_root, inputs);
+  }
+
   // Avoid a refcount bump for the Future, since we check for refcount in
   // DistEngine (see TORCH_INTERNAL_ASSERT(futureGrads.use_count() == 1)
   // in dist_engine.cpp).
@@ -890,13 +910,14 @@ void Engine::initialize_device_threads_pool() {
 
 std::shared_ptr<at::ivalue::Future> Engine::execute_with_graph_task(
     const std::shared_ptr<GraphTask>& graph_task,
-    std::shared_ptr<Node> graph_root) {
+    std::shared_ptr<Node> graph_root,
+    variable_list inputs) {
   initialize_device_threads_pool();
   // Lock mutex for GraphTask.
   std::unique_lock<std::mutex> lock(graph_task->mutex_);
 
   ready_queue(graph_task->cpu_ready_queue_, at::kCPU)->push(
-      NodeTask(graph_task, std::move(graph_root), InputBuffer(0)));
+      NodeTask(graph_task, std::move(graph_root), InputBuffer(std::move(inputs))));
 
   // worker_device == NO_DEVICE it's a CPU thread and it's trying to drive the
   // autograd engine with corresponding GraphTask, and its NOT a re-entrant call
