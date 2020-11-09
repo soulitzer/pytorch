@@ -652,6 +652,9 @@ static variable_list call_function(
 
   {
     at::ThreadLocalStateGuard guard(graph_task->thread_locals_);
+    for (auto x : inputs) {
+      std::cout << x << std::endl;
+    }
     if (has_post_hooks) {
       // In functions/accumulate_grad.cpp, there is some logic to check the
       // conditions under which the incoming gradient can be stolen directly
